@@ -2,8 +2,40 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, Link } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function Create() {
+export default function Create({ dynamic_attributes = [] }) {
     const [mode, setMode] = useState('single'); // 'single' or 'bulk'
+
+    // Generar placeholder dinámico basado en los atributos de labels
+    const generatePlaceholder = () => {
+        if (dynamic_attributes.length === 0) {
+            return "Formato: Nombre, Cédula\nEjemplo:\nJuan Pérez, 1234567890\nMaría González, 0987654321";
+        }
+        
+        // Crear header con los atributos
+        const headers = ['Nombre', 'Cédula', ...dynamic_attributes.map(attr => 
+            attr.charAt(0).toUpperCase() + attr.slice(1).replace(/_/g, ' ')
+        )];
+        
+        // Crear ejemplos
+        const example1Values = ['Juan Pérez', '1234567890'];
+        const example2Values = ['María González', '0987654321'];
+        
+        dynamic_attributes.forEach((attr, index) => {
+            // Generar valores de ejemplo según el nombre del atributo
+            if (attr.toLowerCase().includes('valor') || attr.toLowerCase().includes('cualidad')) {
+                example1Values.push('Creativo');
+                example2Values.push('Inteligente');
+            } else if (attr.toLowerCase().includes('curso') || attr.toLowerCase().includes('clase')) {
+                example1Values.push('Matemáticas');
+                example2Values.push('Ciencias');
+            } else {
+                example1Values.push(`Valor ${index + 1}`);
+                example2Values.push(`Valor ${index + 1}`);
+            }
+        });
+        
+        return `Formato con headers:\n${headers.join(', ')}\n${example1Values.join(', ')}\n${example2Values.join(', ')}`;
+    };
 
     const singleForm = useForm({
         name: '',
@@ -135,6 +167,28 @@ export default function Create() {
                             </form>
                         ) : (
                             <form onSubmit={submitBulk} className="p-6">
+                                {/* Info sobre atributos dinámicos si existen */}
+                                {dynamic_attributes.length > 0 && (
+                                    <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                        <p className="text-sm font-medium text-green-800 mb-2">
+                                            📋 Atributos dinámicos detectados en tus diseños:
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {dynamic_attributes.map((attr) => (
+                                                <span
+                                                    key={attr}
+                                                    className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-mono"
+                                                >
+                                                    {attr}
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <p className="text-xs text-green-600 mt-2">
+                                            Incluye estos como columnas en tu CSV para que se usen en los certificados.
+                                        </p>
+                                    </div>
+                                )}
+
                                 <div className="mb-4">
                                     <label
                                         htmlFor="bulk_text"
@@ -149,7 +203,7 @@ export default function Create() {
                                         onChange={(e) =>
                                             bulkForm.setData('bulk_text', e.target.value)
                                         }
-                                        placeholder="Formato: Nombre, Cédula&#10;Ejemplo:&#10;Juan Pérez, 1234567890&#10;María González, 0987654321&#10;Carlos Rodríguez, 1122334455"
+                                        placeholder={generatePlaceholder()}
                                         className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-mono text-sm"
                                         required
                                     />
@@ -158,11 +212,20 @@ export default function Create() {
                                             {bulkForm.errors.bulk_text}
                                         </p>
                                     )}
-                                    <p className="mt-2 text-xs text-gray-500">
-                                        <strong>Formato:</strong> Cada línea debe contener "Nombre, Cédula" separados por coma.
-                                        <br />
-                                        Se detectarán automáticamente {countValidLines()} persona(s) válida(s).
-                                    </p>
+                                    <div className="mt-3 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
+                                        <p className="font-medium text-gray-700 mb-2">📝 Formato del CSV:</p>
+                                        <ul className="list-disc list-inside space-y-1">
+                                            <li><strong>Primera línea (opcional):</strong> Headers de columnas (ej: Nombre, Cédula, Valor)</li>
+                                            <li><strong>Columnas básicas:</strong> Nombre, Cédula (separadas por coma)</li>
+                                            {dynamic_attributes.length > 0 && (
+                                                <li><strong>Columnas adicionales:</strong> {dynamic_attributes.join(', ')}</li>
+                                            )}
+                                            <li><strong>Auto-detección:</strong> El sistema detecta headers y columnas automáticamente</li>
+                                        </ul>
+                                        <p className="mt-2 text-gray-500">
+                                            Se detectaron <strong>{countValidLines()}</strong> línea(s) válida(s).
+                                        </p>
+                                    </div>
                                 </div>
 
                                 <div className="flex items-center justify-end gap-4">

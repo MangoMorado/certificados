@@ -44,9 +44,21 @@ export default function AuthenticatedLayout({ header, children }) {
                                 </NavLink>
                                 <NavLink
                                     href={route('certificates.generate-page')}
-                                    active={route().current('certificates.*')}
+                                    active={route().current('certificates.generate-page')}
                                 >
                                     Generar
+                                </NavLink>
+                                <NavLink
+                                    href={route('certificates.history')}
+                                    active={route().current('certificates.history') || route().current('certificates.batch-show')}
+                                >
+                                    Certificados
+                                </NavLink>
+                                <NavLink
+                                    href={route('gallery.index')}
+                                    active={route().current('gallery.*')}
+                                >
+                                    Galería
                                 </NavLink>
                                 <NavLink
                                     href={route('settings.index')}
@@ -172,9 +184,21 @@ export default function AuthenticatedLayout({ header, children }) {
                         </ResponsiveNavLink>
                         <ResponsiveNavLink
                             href={route('certificates.generate-page')}
-                            active={route().current('certificates.*')}
+                            active={route().current('certificates.generate-page')}
                         >
                             Generar
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            href={route('certificates.history')}
+                            active={route().current('certificates.history') || route().current('certificates.batch-show')}
+                        >
+                            Certificados
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            href={route('gallery.index')}
+                            active={route().current('gallery.*')}
+                        >
+                            Galería
                         </ResponsiveNavLink>
                         <ResponsiveNavLink
                             href={route('settings.index')}

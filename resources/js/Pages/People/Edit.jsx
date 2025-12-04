@@ -1,15 +1,38 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, Link } from '@inertiajs/react';
 
-export default function Edit({ person }) {
+export default function Edit({ person, attribute_keys = [] }) {
+    // Inicializar attributes desde la persona
+    const initialAttributes = {};
+    attribute_keys.forEach(key => {
+        initialAttributes[key] = person.attributes?.[key] || '';
+    });
+
     const { data, setData, put, processing, errors } = useForm({
         name: person.name || '',
         cedula: person.cedula || '',
+        attributes: initialAttributes,
     });
 
     const submit = (e) => {
         e.preventDefault();
         put(route('people.update', person.id));
+    };
+
+    // Formatear nombre de atributo para mostrar
+    const formatAttributeName = (key) => {
+        return key
+            .split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    };
+
+    // Actualizar un atributo específico
+    const updateAttribute = (key, value) => {
+        setData('attributes', {
+            ...data.attributes,
+            [key]: value,
+        });
     };
 
     return (
@@ -59,12 +82,41 @@ export default function Edit({ person }) {
                                     value={data.cedula}
                                     onChange={(e) => setData('cedula', e.target.value)}
                                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    required
+                                    placeholder="Opcional"
                                 />
                                 {errors.cedula && (
                                     <p className="mt-1 text-sm text-red-600">{errors.cedula}</p>
                                 )}
                             </div>
+
+                            {/* Campos de atributos personalizados */}
+                            {attribute_keys.length > 0 && (
+                                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                                    <h3 className="text-sm font-medium text-green-800 mb-3">
+                                        Atributos Personalizados
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {attribute_keys.map((key) => (
+                                            <div key={key}>
+                                                <label
+                                                    htmlFor={`attr-${key}`}
+                                                    className="block text-sm font-medium text-green-700"
+                                                >
+                                                    {formatAttributeName(key)}
+                                                </label>
+                                                <input
+                                                    id={`attr-${key}`}
+                                                    type="text"
+                                                    value={data.attributes[key] || ''}
+                                                    onChange={(e) => updateAttribute(key, e.target.value)}
+                                                    className="mt-1 block w-full rounded-md border-green-300 shadow-sm focus:border-green-500 focus:ring-green-500 bg-white"
+                                                    placeholder={`Ingresa ${formatAttributeName(key).toLowerCase()}`}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex items-center justify-end gap-4">
                                 <Link

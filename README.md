@@ -4,14 +4,41 @@ Sistema web desarrollado con Laravel y React para la generación automática de 
 
 ## 🚀 Características
 
-- **Gestión de Plantillas**: Sube imágenes (PNG, JPG, JPEG) como diseños de certificados
-- **Configuración Visual**: Posiciona texto (nombre y cédula) de forma visual en el diseño
-- **Google Fonts**: Integración con Google Fonts para personalizar tipografías
-- **Alineación de Texto**: Control completo de alineación horizontal y vertical
-- **Centrado Automático**: Opción para centrar automáticamente el texto (útil para nombres de diferentes longitudes)
-- **Habilitar/Deshabilitar Cédula**: Opción para incluir o excluir la cédula en los certificados
-- **Registro Masivo**: Importa múltiples personas desde un campo de texto
-- **Generación Masiva**: Genera certificados PDF para múltiples personas de una vez
+### Gestión de Plantillas
+- Sube imágenes (PNG, JPG, JPEG) como diseños de certificados
+- Configuración visual de posiciones de texto e imágenes
+- Editor interactivo con vista previa en tiempo real
+
+### Personalización de Texto
+- **Google Fonts**: Integración completa con API de Google Fonts
+- **Peso de fuente**: Soporte para diferentes pesos (100-900)
+- **Alineación**: Control completo horizontal (izquierda, centro, derecha) y vertical (arriba, medio, abajo)
+- **Centrado Automático**: Opción para centrar texto independientemente de su longitud
+- **Colores personalizados**: Selector de color para cada campo
+
+### Campos Dinámicos
+- **Nombre**: Campo obligatorio para el nombre de la persona
+- **Cédula**: Campo opcional, puede habilitarse/deshabilitarse
+- **Labels Personalizados**: Textos estáticos o valores dinámicos desde atributos de la persona
+- **Prefijos**: Texto prefijo con tamaño de fuente independiente
+- **Imágenes Dinámicas**: Insertar imágenes de la galería según atributos de la persona
+
+### Gestión de Personas
+- Registro individual con nombre, cédula y atributos personalizados
+- **Importación masiva** desde texto (formato CSV)
+- **Atributos dinámicos**: Campos JSON personalizables por persona
+
+### Generación de Certificados
+- **Generación síncrona**: Para 5 o menos certificados (descarga inmediata)
+- **Generación asíncrona**: Para más de 5 certificados (procesamiento en cola)
+- **Progreso en tiempo real**: Seguimiento del estado de generación
+- **Descarga ZIP**: Todos los certificados en un archivo comprimido
+- **Historial completo**: Registro de todos los lotes generados
+
+### Galería de Imágenes
+- Sube imágenes reutilizables (logos, firmas, sellos)
+- Asigna nombres para vincularlas con atributos de personas
+- Inserta imágenes dinámicamente en los certificados
 
 ## 📋 Requisitos
 
@@ -20,7 +47,7 @@ Sistema web desarrollado con Laravel y React para la generación automática de 
 - Node.js >= 18
 - npm o yarn
 - Base de datos MySQL o SQLite
-- Extensiones PHP: PDO, OpenSSL, Mbstring, Tokenizer, XML, Ctype, JSON, BCMath
+- Extensiones PHP: PDO, OpenSSL, Mbstring, Tokenizer, XML, Ctype, JSON, BCMath, Zip
 
 ## 🔧 Instalación
 
@@ -75,7 +102,11 @@ Sistema web desarrollado con Laravel y React para la generación automática de 
 
 9. **Iniciar el servidor de desarrollo**
    ```bash
+   # Opción 1: Solo servidor (generación síncrona)
    php artisan serve
+
+   # Opción 2: Servidor + Cola (recomendado para generación masiva)
+   composer dev
    ```
 
    El proyecto estará disponible en `http://localhost:8000`
@@ -84,7 +115,7 @@ Sistema web desarrollado con Laravel y React para la generación automática de 
 
 ### 1. Crear un Usuario
 
-Puedes crear un usuario desde la interfaz web o usando Laravel Tinker:
+Puedes crear un usuario desde la interfaz web (registro) o usando Laravel Tinker:
 
 ```bash
 php artisan tinker
@@ -109,24 +140,38 @@ User::create([
 
 1. Abre el diseño creado
 2. Haz clic en **Configurar Posiciones**
-3. Selecciona **Posicionar Nombre** o **Posicionar Cédula**
-4. Haz clic en la imagen donde quieres que aparezca el texto
-5. Ajusta:
-   - Tamaño de fuente
-   - Familia de fuente (busca en Google Fonts)
-   - Color de fuente
-   - Alineación horizontal (izquierda, centro, derecha)
-   - Alineación vertical (arriba, centro, abajo)
-   - Centrado automático (para nombres)
-   - Habilitar/deshabilitar cédula
-6. Guarda las posiciones
+3. **Para el Nombre**:
+   - Haz clic en la imagen donde quieres posicionarlo
+   - Ajusta tamaño, fuente, color y alineación
+4. **Para la Cédula** (opcional):
+   - Activa/desactiva con el toggle
+   - Configura posición y estilo
+5. **Para Labels Personalizados**:
+   - Clic en "Agregar Label"
+   - Elige entre texto estático o atributo dinámico
+   - Opcionalmente agrega un prefijo
+6. **Para Imágenes Dinámicas**:
+   - Clic en "Agregar Imagen"
+   - Selecciona el atributo que contiene el nombre de la imagen
+   - Define dimensiones
+7. Guarda las posiciones
 
-### 4. Agregar Personas
+### 4. Subir Imágenes a la Galería
+
+1. Ve a **Galería** en el menú
+2. Haz clic en **Subir Imagen**
+3. Asigna un nombre identificador (ej: "logo_empresa")
+4. Este nombre debe coincidir con el valor del atributo en las personas
+
+### 5. Agregar Personas
 
 #### Individual
 1. Ve a **Personas** en el menú
 2. Haz clic en **Agregar Persona**
-3. Completa nombre y cédula
+3. Completa:
+   - Nombre (obligatorio)
+   - Cédula (opcional)
+   - Atributos personalizados (JSON)
 4. Guarda
 
 #### Masivo
@@ -141,20 +186,34 @@ User::create([
 4. Cada línea es un nuevo registro
 5. Guarda
 
-### 5. Generar Certificados
+### 6. Generar Certificados
 
 1. Ve a **Generar** en el menú
 2. Selecciona un diseño de certificado
-3. Selecciona las personas para las que quieres generar certificados
+3. Selecciona las personas (checkbox)
 4. Haz clic en **Generar Certificados**
-5. Los PDFs se descargarán automáticamente
+5. **Si son ≤5 certificados**: Descarga inmediata
+6. **Si son >5 certificados**: 
+   - Se inicia procesamiento en cola
+   - Ve a **Historial** para seguir el progreso
+   - Descarga el ZIP cuando esté listo
+
+### 7. Ver Historial
+
+1. Ve a **Historial** en el menú
+2. Ve todos los lotes generados con su estado:
+   - 🟡 Pendiente
+   - 🔵 Procesando
+   - 🟢 Completado
+   - 🔴 Fallido
+3. Descarga certificados individuales o el ZIP completo
 
 ## ⚙️ Configuración
 
 ### Google Fonts API Key (Opcional)
 
 1. Ve a **Configuración** en el menú
-2. Ingresa tu API Key de Google Fonts (opcional)
+2. Ingresa tu API Key de Google Fonts
 3. Si no proporcionas una API Key, se usarán las fuentes públicas de Google Fonts
 
 Para obtener una API Key:
@@ -163,36 +222,71 @@ Para obtener una API Key:
 - Habilita la API de Google Fonts
 - Genera una API Key
 
+### Cola de Trabajos
+
+Para habilitar la generación asíncrona de certificados, ejecuta:
+
+```bash
+php artisan queue:listen
+```
+
+O usa el comando de desarrollo que incluye todo:
+
+```bash
+composer dev
+```
+
 ## 🗂️ Estructura del Proyecto
 
 ```
 certificados/
 ├── app/
 │   ├── Http/Controllers/
-│   │   ├── CertificateController.php      # Generación de certificados
-│   │   ├── CertificateTemplateController.php
-│   │   ├── PersonController.php
-│   │   └── SettingsController.php
+│   │   ├── CertificateController.php         # Configuración y generación
+│   │   ├── CertificateHistoryController.php  # Historial de lotes
+│   │   ├── CertificateTemplateController.php # CRUD de plantillas
+│   │   ├── GalleryController.php             # Galería de imágenes
+│   │   ├── PersonController.php              # CRUD de personas
+│   │   ├── ProfileController.php             # Perfil de usuario
+│   │   └── SettingsController.php            # Configuración
+│   ├── Jobs/
+│   │   └── GenerateCertificatesJob.php       # Job de generación asíncrona
 │   ├── Models/
-│   │   ├── CertificateTemplate.php
-│   │   ├── CertificatePosition.php
-│   │   ├── Person.php
-│   │   └── Settings.php
-│   └── Services/
+│   │   ├── CertificateBatch.php              # Lotes de certificados
+│   │   ├── CertificateItem.php               # Items individuales del lote
+│   │   ├── CertificatePosition.php           # Posiciones de texto/imagen
+│   │   ├── CertificateTemplate.php           # Plantillas
+│   │   ├── GalleryImage.php                  # Imágenes de galería
+│   │   ├── Person.php                        # Personas
+│   │   ├── Settings.php                      # Configuración
+│   │   └── User.php                          # Usuarios
+│   └── Providers/
 ├── database/
-│   └── migrations/                        # Migraciones de base de datos
+│   └── migrations/                           # Migraciones de base de datos
 ├── resources/
 │   └── js/
-│       ├── Pages/
-│       │   ├── Certificates/             # Vistas de certificados
-│       │   ├── People/                    # Vistas de personas
-│       │   ├── Templates/                 # Vistas de plantillas
-│       │   └── Settings/                  # Vista de configuración
-│       └── Layouts/
+│       ├── Components/                       # Componentes React reutilizables
+│       ├── Layouts/
+│       │   └── AuthenticatedLayout.jsx       # Layout principal
+│       └── Pages/
+│           ├── Auth/                         # Login, registro, etc.
+│           ├── Certificates/
+│           │   ├── BatchDetail.jsx           # Detalle de un lote
+│           │   ├── Configure.jsx             # Editor de posiciones
+│           │   ├── Generate.jsx              # Página de generación
+│           │   └── History.jsx               # Historial de lotes
+│           ├── Gallery/
+│           │   └── Index.jsx                 # Galería de imágenes
+│           ├── People/                       # CRUD de personas
+│           ├── Settings/                     # Configuración
+│           └── Templates/                    # CRUD de plantillas
 └── storage/
     └── app/public/
-        ├── certificates/                  # Certificados generados
-        └── templates/                     # Plantillas subidas
+        ├── certificates/                     # Certificados generados
+        │   ├── batch_X/                      # Carpeta por lote
+        │   └── zips/                         # Archivos ZIP
+        ├── gallery/                          # Imágenes de galería
+        └── templates/                        # Plantillas subidas
 ```
 
 ## 🔒 Seguridad
@@ -201,6 +295,7 @@ certificados/
 - ✅ Todas las configuraciones sensibles usan variables de entorno
 - ✅ Archivos `.env` y `database.sqlite` están en `.gitignore`
 - ✅ Logs y archivos de storage están protegidos
+- ✅ Autenticación requerida para todas las rutas principales
 
 **Antes de publicar en GitHub**, verifica que:
 - No tengas archivos `.env` en el repositorio
@@ -209,12 +304,37 @@ certificados/
 
 ## 🛠️ Tecnologías Utilizadas
 
-- **Backend**: Laravel 11
-- **Frontend**: React 18 + Inertia.js
-- **Estilos**: Tailwind CSS
-- **PDF**: DomPDF
-- **Base de Datos**: MySQL/SQLite
-- **Fuentes**: Google Fonts API
+| Componente | Tecnología |
+|------------|------------|
+| **Backend** | Laravel 12 |
+| **Frontend** | React 18 + Inertia.js |
+| **Estilos** | Tailwind CSS |
+| **UI Components** | Headless UI |
+| **PDF** | DomPDF |
+| **Build Tool** | Vite 7 |
+| **Base de Datos** | MySQL/SQLite |
+| **Fuentes** | Google Fonts API |
+| **Cola de trabajos** | Laravel Queue |
+| **Autenticación** | Laravel Breeze |
+
+## 🚀 Scripts Disponibles
+
+```bash
+# Desarrollo (servidor + cola + logs + vite)
+composer dev
+
+# Solo compilar assets
+npm run build
+
+# Desarrollo de frontend
+npm run dev
+
+# Ejecutar tests
+composer test
+
+# Setup inicial completo
+composer setup
+```
 
 ## 📝 Licencia
 

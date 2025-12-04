@@ -2,14 +2,15 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, Link, router } from '@inertiajs/react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 
-export default function Configure({ template, google_fonts_api_key }) {
-    const [selectedField, setSelectedField] = useState(null); // 'name' or 'cedula'
+export default function Configure({ template, google_fonts_api_key, available_attributes = [] }) {
+    const [selectedField, setSelectedField] = useState(null); // 'name', 'cedula', or 'label-{index}'
     const [positions, setPositions] = useState({
         name: {
             x: 0,
             y: 0,
             font_size: 16,
             font_family: 'Arial',
+            font_weight: '400',
             font_color: '#000000',
             text_align_horizontal: 'left',
             text_align_vertical: 'top',
@@ -20,6 +21,7 @@ export default function Configure({ template, google_fonts_api_key }) {
             y: 0,
             font_size: 14,
             font_family: 'Arial',
+            font_weight: '400',
             font_color: '#000000',
             text_align_horizontal: 'left',
             text_align_vertical: 'top',
@@ -27,6 +29,22 @@ export default function Configure({ template, google_fonts_api_key }) {
             enabled: true,
         },
     });
+
+    // Opciones de peso de fuente
+    const fontWeightOptions = [
+        { value: '100', label: 'Thin (100)' },
+        { value: '200', label: 'Extra Light (200)' },
+        { value: '300', label: 'Light (300)' },
+        { value: '400', label: 'Regular (400)' },
+        { value: '500', label: 'Medium (500)' },
+        { value: '600', label: 'Semi Bold (600)' },
+        { value: '700', label: 'Bold (700)' },
+        { value: '800', label: 'Extra Bold (800)' },
+        { value: '900', label: 'Black (900)' },
+    ];
+    const [labels, setLabels] = useState([]);
+    const [images, setImages] = useState([]); // Campo para imágenes dinámicas
+    const [galleryImages, setGalleryImages] = useState([]); // Imágenes disponibles en galería
     const [previewName, setPreviewName] = useState('Nombre de Ejemplo');
     const [previewCedula, setPreviewCedula] = useState('1234567890');
     const containerRef = useRef(null);
@@ -37,24 +55,70 @@ export default function Configure({ template, google_fonts_api_key }) {
     const [showFontResults, setShowFontResults] = useState(false);
     const fontSearchTimeoutRef = useRef(null);
 
+    // Cargar imágenes de la galería
+    useEffect(() => {
+        fetch(route('api.gallery.images'))
+            .then(res => res.json())
+            .then(data => setGalleryImages(data.images || []))
+            .catch(err => console.error('Error loading gallery images:', err));
+    }, []);
+
     // Cargar posiciones existentes si existen
     useEffect(() => {
         if (template.positions && template.positions.length > 0) {
             const posMap = {};
+            const loadedLabels = [];
+            const loadedImages = [];
+            
             template.positions.forEach((pos) => {
-                posMap[pos.field_type] = {
-                    x: parseFloat(pos.x),
-                    y: parseFloat(pos.y),
-                    font_size: pos.font_size,
-                    font_family: pos.font_family,
-                    font_color: pos.font_color,
-                    text_align_horizontal: pos.text_align_horizontal || 'left',
-                    text_align_vertical: pos.text_align_vertical || 'top',
-                    center_automatically: pos.center_automatically || false,
-                    enabled: pos.enabled !== undefined ? pos.enabled : (pos.field_type === 'cedula' ? true : true),
-                };
+                if (pos.field_type === 'label') {
+                    loadedLabels.push({
+                        id: `label-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        label_text: pos.label_text || '',
+                        attribute_key: pos.attribute_key || '',
+                        prefix: pos.prefix || '',
+                        prefix_font_size: pos.prefix_font_size || null,
+                        x: parseFloat(pos.x),
+                        y: parseFloat(pos.y),
+                        font_size: pos.font_size,
+                        font_family: pos.font_family,
+                        font_weight: pos.font_weight || '400',
+                        font_color: pos.font_color,
+                        text_align_horizontal: pos.text_align_horizontal || 'left',
+                        text_align_vertical: pos.text_align_vertical || 'top',
+                        center_automatically: pos.center_automatically || false,
+                        enabled: pos.enabled !== undefined ? pos.enabled : true,
+                    });
+                } else if (pos.field_type === 'image') {
+                    loadedImages.push({
+                        id: `image-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        attribute_key: pos.attribute_key || '',
+                        x: parseFloat(pos.x),
+                        y: parseFloat(pos.y),
+                        image_width: pos.image_width || 100,
+                        image_height: pos.image_height || 100,
+                        center_automatically: pos.center_automatically || false,
+                        enabled: pos.enabled !== undefined ? pos.enabled : true,
+                    });
+                } else {
+                    posMap[pos.field_type] = {
+                        x: parseFloat(pos.x),
+                        y: parseFloat(pos.y),
+                        font_size: pos.font_size,
+                        font_family: pos.font_family,
+                        font_weight: pos.font_weight || '400',
+                        font_color: pos.font_color,
+                        text_align_horizontal: pos.text_align_horizontal || 'left',
+                        text_align_vertical: pos.text_align_vertical || 'top',
+                        center_automatically: pos.center_automatically || false,
+                        enabled: pos.enabled !== undefined ? pos.enabled : (pos.field_type === 'cedula' ? true : true),
+                    };
+                }
             });
+            
             setPositions((prev) => ({ ...prev, ...posMap }));
+            setLabels(loadedLabels);
+            setImages(loadedImages);
         }
     }, [template.positions]);
 
@@ -85,6 +149,10 @@ export default function Configure({ template, google_fonts_api_key }) {
         const fontsToLoad = new Set();
         if (positions.name.font_family) fontsToLoad.add(positions.name.font_family);
         if (positions.cedula.font_family) fontsToLoad.add(positions.cedula.font_family);
+        // Agregar fuentes de los labels
+        labels.forEach(label => {
+            if (label.font_family) fontsToLoad.add(label.font_family);
+        });
         
         const systemFonts = ['Arial', 'Times New Roman', 'Courier New', 'Helvetica', 'Georgia', 'Verdana', 'Tahoma'];
         const loadedLinks = [];
@@ -97,7 +165,7 @@ export default function Configure({ template, google_fonts_api_key }) {
                 if (!existingLink) {
                     const link = document.createElement('link');
                     link.rel = 'stylesheet';
-                    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@400;700&display=swap`;
+                    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@100;200;300;400;500;600;700;800;900&display=swap`;
                     link.setAttribute('data-google-font', font);
                     
                     // Esperar a que la fuente se cargue
@@ -145,7 +213,7 @@ export default function Configure({ template, google_fonts_api_key }) {
                 });
             }, 1000);
         }
-    }, [positions.name.font_family, positions.cedula.font_family]);
+    }, [positions.name.font_family, positions.cedula.font_family, labels]);
 
     // Función helper para calcular coordenadas escaladas
     const getScaledPosition = (x, y) => {
@@ -170,62 +238,152 @@ export default function Configure({ template, google_fonts_api_key }) {
         };
     };
 
-    const handleImageClick = (e) => {
-        if (!selectedField || !containerRef.current || !imageRef.current) return;
-        
-        // Si el centrado automático está activado, solo actualizar Y
-        if (positions[selectedField].center_automatically) {
-            const imageRect = imageRef.current.getBoundingClientRect();
-            const y = e.clientY - imageRect.top;
-            const naturalHeight = imageRef.current.naturalHeight || imageRef.current.height;
-            const scaleY = naturalHeight / imageRect.height;
-            const realY = Math.round(y * scaleY);
-            
-            setPositions((prev) => ({
+    // Helper para obtener el campo actual (puede ser positions, label o image)
+    const getCurrentField = () => {
+        if (!selectedField) return null;
+        if (selectedField === 'name' || selectedField === 'cedula') {
+            return positions[selectedField];
+        }
+        // Es un label
+        const label = labels.find(l => l.id === selectedField);
+        if (label) return label;
+        // Es una imagen
+        return images.find(i => i.id === selectedField);
+    };
+
+    // Verificar si el campo actual es una imagen
+    const isCurrentFieldImage = () => {
+        if (!selectedField) return false;
+        return images.some(i => i.id === selectedField);
+    };
+
+    // Helper para actualizar el campo actual
+    const updateCurrentField = (updates) => {
+        if (!selectedField) return;
+        if (selectedField === 'name' || selectedField === 'cedula') {
+            setPositions(prev => ({
                 ...prev,
                 [selectedField]: {
                     ...prev[selectedField],
-                    y: realY,
+                    ...updates,
                 },
             }));
+        } else if (images.some(i => i.id === selectedField)) {
+            // Es una imagen
+            setImages(prev => prev.map(i => 
+                i.id === selectedField ? { ...i, ...updates } : i
+            ));
+        } else {
+            // Es un label
+            setLabels(prev => prev.map(l => 
+                l.id === selectedField ? { ...l, ...updates } : l
+            ));
+        }
+    };
+
+    const handleImageClick = (e) => {
+        if (!selectedField || !containerRef.current || !imageRef.current) return;
+        
+        const currentField = getCurrentField();
+        if (!currentField) return;
+
+        const imageRect = imageRef.current.getBoundingClientRect();
+        const naturalWidth = imageRef.current.naturalWidth || imageRef.current.width;
+        const naturalHeight = imageRef.current.naturalHeight || imageRef.current.height;
+        const scaleX = naturalWidth / imageRect.width;
+        const scaleY = naturalHeight / imageRect.height;
+
+        // Si el centrado automático está activado, solo actualizar Y
+        if (currentField.center_automatically) {
+            const y = e.clientY - imageRect.top;
+            const realY = Math.round(y * scaleY);
+            updateCurrentField({ y: realY });
             return;
         }
 
-        const imageRect = imageRef.current.getBoundingClientRect();
-        
-        // Calcular la posición relativa a la imagen, no al contenedor
+        // Calcular la posición relativa a la imagen
         const x = e.clientX - imageRect.left;
         const y = e.clientY - imageRect.top;
-        
-        // Obtener el tamaño natural de la imagen
-        const naturalWidth = imageRef.current.naturalWidth || imageRef.current.width;
-        const naturalHeight = imageRef.current.naturalHeight || imageRef.current.height;
-        
-        // Calcular el factor de escala entre la imagen mostrada y la imagen real
-        const scaleX = naturalWidth / imageRect.width;
-        const scaleY = naturalHeight / imageRect.height;
         
         // Convertir las coordenadas al tamaño real de la imagen
         const realX = Math.round(x * scaleX);
         const realY = Math.round(y * scaleY);
 
-        setPositions((prev) => ({
-            ...prev,
-            [selectedField]: {
-                ...prev[selectedField],
-                x: realX,
-                y: realY,
-            },
-        }));
+        updateCurrentField({ x: realX, y: realY });
+    };
+
+    // Agregar nuevo label
+    const addLabel = () => {
+        const newLabel = {
+            id: `label-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            label_text: '',
+            attribute_key: '',
+            prefix: '',
+            prefix_font_size: null,
+            x: 100,
+            y: 100,
+            font_size: 14,
+            font_family: 'Arial',
+            font_weight: '400',
+            font_color: '#000000',
+            text_align_horizontal: 'left',
+            text_align_vertical: 'top',
+            center_automatically: false,
+            enabled: true,
+        };
+        setLabels(prev => [...prev, newLabel]);
+        setSelectedField(newLabel.id);
+    };
+
+    // Eliminar label
+    const removeLabel = (labelId) => {
+        setLabels(prev => prev.filter(l => l.id !== labelId));
+        if (selectedField === labelId) {
+            setSelectedField(null);
+        }
+    };
+
+    // Agregar nueva imagen
+    const addImage = () => {
+        const newImage = {
+            id: `image-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            attribute_key: available_attributes.find(a => a.toLowerCase().includes('imagen')) || available_attributes[0] || '',
+            x: 100,
+            y: 100,
+            image_width: 100,
+            image_height: 100,
+            center_automatically: false,
+            enabled: true,
+        };
+        setImages(prev => [...prev, newImage]);
+        setSelectedField(newImage.id);
+    };
+
+    // Eliminar imagen
+    const removeImage = (imageId) => {
+        setImages(prev => prev.filter(i => i.id !== imageId));
+        if (selectedField === imageId) {
+            setSelectedField(null);
+        }
     };
 
     const { data, setData, post, processing } = useForm({
         positions: positions,
+        labels: labels,
+        images: images,
     });
 
     useEffect(() => {
         setData('positions', positions);
     }, [positions]);
+
+    useEffect(() => {
+        setData('labels', labels);
+    }, [labels]);
+
+    useEffect(() => {
+        setData('images', images);
+    }, [images]);
 
     // Buscar fuentes de Google Fonts
     useEffect(() => {
@@ -323,8 +481,345 @@ export default function Configure({ template, google_fonts_api_key }) {
                                     </div>
                                 </div>
 
-                                {selectedField && (
+                                {/* Sección de Labels */}
+                                <div className="mb-6 border-t pt-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <p className="text-sm font-medium text-gray-700">
+                                            Labels personalizados
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={addLabel}
+                                            className="px-3 py-1 text-xs font-semibold bg-green-600 text-white rounded-md hover:bg-green-500"
+                                        >
+                                            + Agregar Label
+                                        </button>
+                                    </div>
+                                    {labels.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {labels.map((label, index) => (
+                                                <div
+                                                    key={label.id}
+                                                    className={`flex items-center gap-2 p-2 rounded-md ${
+                                                        selectedField === label.id
+                                                            ? 'bg-indigo-100 border-2 border-indigo-600'
+                                                            : 'bg-gray-100 border border-gray-200'
+                                                    }`}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedField(label.id)}
+                                                        className="flex-1 text-left text-sm truncate"
+                                                    >
+                                                        <span className="font-medium">#{index + 1}:</span>{' '}
+                                                        {label.attribute_key ? (
+                                                            <span className="text-green-600 italic">[{label.attribute_key}]</span>
+                                                        ) : (
+                                                            <span className="text-gray-600">{label.label_text || 'Sin texto'}</span>
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeLabel(label.id)}
+                                                        className="p-1 text-red-600 hover:bg-red-100 rounded"
+                                                        title="Eliminar label"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-gray-500 italic">
+                                            No hay labels. Haz clic en "Agregar Label" para crear uno.
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Sección de Imágenes */}
+                                <div className="mb-6 border-t pt-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <p className="text-sm font-medium text-gray-700">
+                                            Imágenes dinámicas
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={addImage}
+                                            className="px-3 py-1 text-xs font-semibold bg-amber-600 text-white rounded-md hover:bg-amber-500"
+                                            disabled={available_attributes.length === 0}
+                                            title={available_attributes.length === 0 ? 'Importa personas con atributos primero' : ''}
+                                        >
+                                            + Agregar Imagen
+                                        </button>
+                                    </div>
+                                    {images.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {images.map((image, index) => (
+                                                <div
+                                                    key={image.id}
+                                                    className={`flex items-center gap-2 p-2 rounded-md ${
+                                                        selectedField === image.id
+                                                            ? 'bg-amber-100 border-2 border-amber-600'
+                                                            : 'bg-amber-50 border border-amber-200'
+                                                    }`}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedField(image.id)}
+                                                        className="flex-1 text-left text-sm truncate"
+                                                    >
+                                                        <span className="font-medium text-amber-700">🖼️ #{index + 1}:</span>{' '}
+                                                        <span className="text-amber-600 italic">[{image.attribute_key || 'Sin atributo'}]</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeImage(image.id)}
+                                                        className="p-1 text-red-600 hover:bg-red-100 rounded"
+                                                        title="Eliminar imagen"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-gray-500 italic">
+                                            No hay imágenes. Haz clic en "Agregar Imagen" para crear una.
+                                        </p>
+                                    )}
+                                </div>
+
+                                {selectedField && getCurrentField() && (
                                     <div className="mb-6 space-y-4 border-t pt-4">
+                                        {/* Configuración de imagen - solo para imágenes */}
+                                        {isCurrentFieldImage() && (
+                                            <div className="space-y-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                                                <p className="text-sm font-medium text-amber-800">🖼️ Configuración de Imagen</p>
+                                                
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                        Atributo de imagen
+                                                    </label>
+                                                    {available_attributes.length > 0 ? (
+                                                        <select
+                                                            value={getCurrentField()?.attribute_key || ''}
+                                                            onChange={(e) => updateCurrentField({ attribute_key: e.target.value })}
+                                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-amber-500 focus:ring-amber-500 text-sm"
+                                                        >
+                                                            {available_attributes.map((attr) => (
+                                                                <option key={attr} value={attr}>
+                                                                    {attr}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    ) : (
+                                                        <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                                                            No hay atributos disponibles.
+                                                        </p>
+                                                    )}
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        El valor debe coincidir con el nombre de una imagen en la galería.
+                                                    </p>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                            Ancho (px)
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            min="10"
+                                                            max="1000"
+                                                            value={getCurrentField()?.image_width || 100}
+                                                            onChange={(e) => updateCurrentField({ image_width: parseInt(e.target.value) })}
+                                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-amber-500 focus:ring-amber-500 text-sm"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                            Alto (px)
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            min="10"
+                                                            max="1000"
+                                                            value={getCurrentField()?.image_height || 100}
+                                                            onChange={(e) => updateCurrentField({ image_height: parseInt(e.target.value) })}
+                                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-amber-500 focus:ring-amber-500 text-sm"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        id="image_center_automatically"
+                                                        checked={getCurrentField()?.center_automatically || false}
+                                                        onChange={(e) => updateCurrentField({ center_automatically: e.target.checked })}
+                                                        className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                                    />
+                                                    <label htmlFor="image_center_automatically" className="ml-2 block text-sm text-gray-700">
+                                                        Centrar automáticamente (X variable)
+                                                    </label>
+                                                </div>
+
+                                                <div className="flex items-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        id="image_enabled"
+                                                        checked={getCurrentField()?.enabled ?? true}
+                                                        onChange={(e) => updateCurrentField({ enabled: e.target.checked })}
+                                                        className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                                    />
+                                                    <label htmlFor="image_enabled" className="ml-2 block text-sm text-gray-700">
+                                                        Habilitar imagen
+                                                    </label>
+                                                </div>
+
+                                                {/* Preview de imágenes disponibles */}
+                                                {galleryImages.length > 0 && (
+                                                    <div className="mt-3 p-2 bg-white rounded border border-amber-200">
+                                                        <p className="text-xs font-medium text-gray-600 mb-2">Imágenes en galería:</p>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {galleryImages.slice(0, 8).map((img) => (
+                                                                <span key={img.id} className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded">
+                                                                    {img.name}
+                                                                </span>
+                                                            ))}
+                                                            {galleryImages.length > 8 && (
+                                                                <span className="text-xs text-gray-500">+{galleryImages.length - 8} más</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Configuración del label - solo para labels */}
+                                        {selectedField !== 'name' && selectedField !== 'cedula' && !isCurrentFieldImage() && (
+                                            <div className="space-y-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                                                <p className="text-sm font-medium text-green-800">Contenido del Label</p>
+                                                
+                                                {/* Selector de tipo de contenido */}
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateCurrentField({ attribute_key: '', label_text: getCurrentField()?.label_text || 'Texto' })}
+                                                        className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold ${
+                                                            !getCurrentField()?.attribute_key
+                                                                ? 'bg-green-600 text-white'
+                                                                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                                        }`}
+                                                    >
+                                                        Texto Fijo
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateCurrentField({ attribute_key: available_attributes[0] || '', label_text: '' })}
+                                                        className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold ${
+                                                            getCurrentField()?.attribute_key
+                                                                ? 'bg-green-600 text-white'
+                                                                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                                        }`}
+                                                        disabled={available_attributes.length === 0}
+                                                        title={available_attributes.length === 0 ? 'Importa personas con atributos primero' : ''}
+                                                    >
+                                                        Atributo Dinámico
+                                                    </button>
+                                                </div>
+
+                                                {/* Input de texto fijo */}
+                                                {!getCurrentField()?.attribute_key && (
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                            Texto a mostrar
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={getCurrentField()?.label_text || ''}
+                                                            onChange={(e) => updateCurrentField({ label_text: e.target.value })}
+                                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
+                                                            placeholder="Ej: Certificado de Participación"
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Selector de atributo dinámico */}
+                                                {getCurrentField()?.attribute_key !== undefined && getCurrentField()?.attribute_key !== '' && (
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                                Atributo de la persona
+                                                            </label>
+                                                            {available_attributes.length > 0 ? (
+                                                                <select
+                                                                    value={getCurrentField()?.attribute_key || ''}
+                                                                    onChange={(e) => updateCurrentField({ attribute_key: e.target.value, label_text: '' })}
+                                                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm"
+                                                                >
+                                                                    {available_attributes.map((attr) => (
+                                                                        <option key={attr} value={attr}>
+                                                                            {attr}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            ) : (
+                                                                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                                                                    No hay atributos disponibles. Importa personas con columnas adicionales primero.
+                                                                </p>
+                                                            )}
+                                                            <p className="text-xs text-gray-500 mt-1">
+                                                                El valor se tomará del atributo de cada persona al generar el certificado.
+                                                            </p>
+                                                        </div>
+
+                                                        {/* Configuración de Prefijo */}
+                                                        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                                            <p className="text-xs font-medium text-blue-800 mb-2">Prefijo (opcional)</p>
+                                                            <div className="space-y-2">
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                                        Texto del prefijo
+                                                                    </label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={getCurrentField()?.prefix || ''}
+                                                                        onChange={(e) => updateCurrentField({ prefix: e.target.value })}
+                                                                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                                                                        placeholder='Ej: "Por "'
+                                                                    />
+                                                                    <p className="text-xs text-gray-500 mt-1">
+                                                                        Se mostrará antes del valor. Incluye el espacio si lo necesitas.
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                                        Tamaño de fuente del prefijo
+                                                                    </label>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="8"
+                                                                        max="500"
+                                                                        value={getCurrentField()?.prefix_font_size || getCurrentField()?.font_size || 14}
+                                                                        onChange={(e) => updateCurrentField({ prefix_font_size: parseInt(e.target.value) })}
+                                                                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                                                                    />
+                                                                    <p className="text-xs text-gray-500 mt-1">
+                                                                        Puedes usar un tamaño más pequeño que el valor principal.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                                 Tamaño de Fuente
@@ -332,17 +827,9 @@ export default function Configure({ template, google_fonts_api_key }) {
                                             <input
                                                 type="number"
                                                 min="8"
-                                                max="72"
-                                                value={positions[selectedField].font_size}
-                                                onChange={(e) =>
-                                                    setPositions((prev) => ({
-                                                        ...prev,
-                                                        [selectedField]: {
-                                                            ...prev[selectedField],
-                                                            font_size: parseInt(e.target.value),
-                                                        },
-                                                    }))
-                                                }
+                                                max="500"
+                                                value={getCurrentField()?.font_size || 14}
+                                                onChange={(e) => updateCurrentField({ font_size: parseInt(e.target.value) })}
                                                 className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                             />
                                         </div>
@@ -404,14 +891,14 @@ export default function Configure({ template, google_fonts_api_key }) {
                                                     <span
                                                         className="font-semibold"
                                                         style={{
-                                                            fontFamily: positions[selectedField].font_family 
-                                                                ? (positions[selectedField].font_family.includes(' ') 
-                                                                    ? `"${positions[selectedField].font_family}"` 
-                                                                    : positions[selectedField].font_family)
+                                                            fontFamily: getCurrentField()?.font_family 
+                                                                ? (getCurrentField().font_family.includes(' ') 
+                                                                    ? `"${getCurrentField().font_family}"` 
+                                                                    : getCurrentField().font_family)
                                                                 : 'Arial',
                                                         }}
                                                     >
-                                                        {positions[selectedField].font_family || 'Arial'}
+                                                        {getCurrentField()?.font_family || 'Arial'}
                                                     </span>
                                                 </div>
                                             </div>
@@ -423,13 +910,7 @@ export default function Configure({ template, google_fonts_api_key }) {
                                                         <div
                                                             key={index}
                                                             onClick={() => {
-                                                                setPositions((prev) => ({
-                                                                    ...prev,
-                                                                    [selectedField]: {
-                                                                        ...prev[selectedField],
-                                                                        font_family: font.family,
-                                                                    },
-                                                                }));
+                                                                updateCurrentField({ font_family: font.family });
                                                                 setFontSearchQuery('');
                                                                 setShowFontResults(false);
                                                             }}
@@ -458,20 +939,29 @@ export default function Configure({ template, google_fonts_api_key }) {
 
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Peso de Fuente
+                                            </label>
+                                            <select
+                                                value={getCurrentField()?.font_weight || '400'}
+                                                onChange={(e) => updateCurrentField({ font_weight: e.target.value })}
+                                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                            >
+                                                {fontWeightOptions.map((option) => (
+                                                    <option key={option.value} value={option.value}>
+                                                        {option.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
                                                 Color de Fuente
                                             </label>
                                             <input
                                                 type="color"
-                                                value={positions[selectedField].font_color}
-                                                onChange={(e) =>
-                                                    setPositions((prev) => ({
-                                                        ...prev,
-                                                        [selectedField]: {
-                                                            ...prev[selectedField],
-                                                            font_color: e.target.value,
-                                                        },
-                                                    }))
-                                                }
+                                                value={getCurrentField()?.font_color || '#000000'}
+                                                onChange={(e) => updateCurrentField({ font_color: e.target.value })}
                                                 className="block w-full h-10 rounded-md border-gray-300 shadow-sm"
                                             />
                                         </div>
@@ -483,17 +973,9 @@ export default function Configure({ template, google_fonts_api_key }) {
                                             <div className="flex gap-2">
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
-                                                        setPositions((prev) => ({
-                                                            ...prev,
-                                                            [selectedField]: {
-                                                                ...prev[selectedField],
-                                                                text_align_horizontal: 'left',
-                                                            },
-                                                        }))
-                                                    }
+                                                    onClick={() => updateCurrentField({ text_align_horizontal: 'left' })}
                                                     className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold ${
-                                                        positions[selectedField].text_align_horizontal === 'left'
+                                                        getCurrentField()?.text_align_horizontal === 'left'
                                                             ? 'bg-indigo-600 text-white'
                                                             : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                                     }`}
@@ -502,17 +984,9 @@ export default function Configure({ template, google_fonts_api_key }) {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
-                                                        setPositions((prev) => ({
-                                                            ...prev,
-                                                            [selectedField]: {
-                                                                ...prev[selectedField],
-                                                                text_align_horizontal: 'center',
-                                                            },
-                                                        }))
-                                                    }
+                                                    onClick={() => updateCurrentField({ text_align_horizontal: 'center' })}
                                                     className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold ${
-                                                        positions[selectedField].text_align_horizontal === 'center'
+                                                        getCurrentField()?.text_align_horizontal === 'center'
                                                             ? 'bg-indigo-600 text-white'
                                                             : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                                     }`}
@@ -521,17 +995,9 @@ export default function Configure({ template, google_fonts_api_key }) {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
-                                                        setPositions((prev) => ({
-                                                            ...prev,
-                                                            [selectedField]: {
-                                                                ...prev[selectedField],
-                                                                text_align_horizontal: 'right',
-                                                            },
-                                                        }))
-                                                    }
+                                                    onClick={() => updateCurrentField({ text_align_horizontal: 'right' })}
                                                     className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold ${
-                                                        positions[selectedField].text_align_horizontal === 'right'
+                                                        getCurrentField()?.text_align_horizontal === 'right'
                                                             ? 'bg-indigo-600 text-white'
                                                             : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                                     }`}
@@ -548,17 +1014,9 @@ export default function Configure({ template, google_fonts_api_key }) {
                                             <div className="flex gap-2">
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
-                                                        setPositions((prev) => ({
-                                                            ...prev,
-                                                            [selectedField]: {
-                                                                ...prev[selectedField],
-                                                                text_align_vertical: 'top',
-                                                            },
-                                                        }))
-                                                    }
+                                                    onClick={() => updateCurrentField({ text_align_vertical: 'top' })}
                                                     className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold ${
-                                                        positions[selectedField].text_align_vertical === 'top'
+                                                        getCurrentField()?.text_align_vertical === 'top'
                                                             ? 'bg-indigo-600 text-white'
                                                             : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                                     }`}
@@ -567,17 +1025,9 @@ export default function Configure({ template, google_fonts_api_key }) {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
-                                                        setPositions((prev) => ({
-                                                            ...prev,
-                                                            [selectedField]: {
-                                                                ...prev[selectedField],
-                                                                text_align_vertical: 'middle',
-                                                            },
-                                                        }))
-                                                    }
+                                                    onClick={() => updateCurrentField({ text_align_vertical: 'middle' })}
                                                     className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold ${
-                                                        positions[selectedField].text_align_vertical === 'middle'
+                                                        getCurrentField()?.text_align_vertical === 'middle'
                                                             ? 'bg-indigo-600 text-white'
                                                             : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                                     }`}
@@ -586,17 +1036,9 @@ export default function Configure({ template, google_fonts_api_key }) {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
-                                                        setPositions((prev) => ({
-                                                            ...prev,
-                                                            [selectedField]: {
-                                                                ...prev[selectedField],
-                                                                text_align_vertical: 'bottom',
-                                                            },
-                                                        }))
-                                                    }
+                                                    onClick={() => updateCurrentField({ text_align_vertical: 'bottom' })}
                                                     className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold ${
-                                                        positions[selectedField].text_align_vertical === 'bottom'
+                                                        getCurrentField()?.text_align_vertical === 'bottom'
                                                             ? 'bg-indigo-600 text-white'
                                                             : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                                     }`}
@@ -610,18 +1052,11 @@ export default function Configure({ template, google_fonts_api_key }) {
                                             <input
                                                 type="checkbox"
                                                 id="center_automatically"
-                                                checked={positions[selectedField].center_automatically}
-                                                onChange={(e) =>
-                                                    setPositions((prev) => ({
-                                                        ...prev,
-                                                        [selectedField]: {
-                                                            ...prev[selectedField],
-                                                            center_automatically: e.target.checked,
-                                                            // Si se activa el centrado automático, desactivar alineación horizontal manual
-                                                            text_align_horizontal: e.target.checked ? 'center' : prev[selectedField].text_align_horizontal,
-                                                        },
-                                                    }))
-                                                }
+                                                checked={getCurrentField()?.center_automatically || false}
+                                                onChange={(e) => updateCurrentField({ 
+                                                    center_automatically: e.target.checked,
+                                                    text_align_horizontal: e.target.checked ? 'center' : getCurrentField()?.text_align_horizontal
+                                                })}
                                                 className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                             />
                                             <label
@@ -632,52 +1067,47 @@ export default function Configure({ template, google_fonts_api_key }) {
                                             </label>
                                         </div>
 
-                                        {/* Checkbox para habilitar/deshabilitar cédula - solo para campo cedula */}
-                                        {selectedField === 'cedula' && (
+                                        {/* Checkbox para habilitar/deshabilitar - para cédula y labels */}
+                                        {(selectedField === 'cedula' || (selectedField !== 'name' && selectedField !== 'cedula')) && (
                                             <div className="flex items-center">
                                                 <input
                                                     type="checkbox"
-                                                    id="cedula_enabled"
-                                                    checked={positions.cedula.enabled}
-                                                    onChange={(e) =>
-                                                        setPositions((prev) => ({
-                                                            ...prev,
-                                                            cedula: {
-                                                                ...prev.cedula,
-                                                                enabled: e.target.checked,
-                                                            },
-                                                        }))
-                                                    }
+                                                    id="field_enabled"
+                                                    checked={getCurrentField()?.enabled ?? true}
+                                                    onChange={(e) => updateCurrentField({ enabled: e.target.checked })}
                                                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                                 />
                                                 <label
-                                                    htmlFor="cedula_enabled"
+                                                    htmlFor="field_enabled"
                                                     className="ml-2 block text-sm text-gray-700"
                                                 >
-                                                    Habilitar cédula
+                                                    {selectedField === 'cedula' ? 'Habilitar cédula' : 'Habilitar label'}
                                                 </label>
                                             </div>
                                         )}
 
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                Texto de Vista Previa
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={
-                                                    selectedField === 'name'
-                                                        ? previewName
-                                                        : previewCedula
-                                                }
-                                                onChange={(e) =>
-                                                    selectedField === 'name'
-                                                        ? setPreviewName(e.target.value)
-                                                        : setPreviewCedula(e.target.value)
-                                                }
-                                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                            />
-                                        </div>
+                                        {/* Texto de vista previa - solo para nombre y cédula */}
+                                        {(selectedField === 'name' || selectedField === 'cedula') && (
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Texto de Vista Previa
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={
+                                                        selectedField === 'name'
+                                                            ? previewName
+                                                            : previewCedula
+                                                    }
+                                                    onChange={(e) =>
+                                                        selectedField === 'name'
+                                                            ? setPreviewName(e.target.value)
+                                                            : setPreviewCedula(e.target.value)
+                                                    }
+                                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -789,6 +1219,7 @@ export default function Configure({ template, google_fonts_api_key }) {
                                             top: `${yScaled}px`,
                                             fontSize: `${positions.name.font_size * scaleX}px`,
                                             fontFamily: fontFamily,
+                                            fontWeight: positions.name.font_weight || '400',
                                             color: positions.name.font_color || '#000000',
                                             pointerEvents: 'none',
                                             border: selectedField === 'name' ? '2px solid #4F46E5' : '1px solid #9CA3AF',
@@ -867,6 +1298,7 @@ export default function Configure({ template, google_fonts_api_key }) {
                                             top: `${yScaled}px`,
                                             fontSize: `${positions.cedula.font_size * scaleX}px`,
                                             fontFamily: fontFamily,
+                                            fontWeight: positions.cedula.font_weight || '400',
                                             color: positions.cedula.font_color || '#000000',
                                             pointerEvents: 'none',
                                             border: selectedField === 'cedula' ? '2px solid #4F46E5' : '1px solid #9CA3AF',
@@ -882,10 +1314,174 @@ export default function Configure({ template, google_fonts_api_key }) {
                                         );
                                     })()}
 
+                                    {/* Indicadores de posición de los labels */}
+                                    {labels.filter(l => l.enabled !== false && l.y > 0).map((label) => {
+                                        const imageEl = imageRef.current;
+                                        if (!imageEl) return null;
+                                        
+                                        const containerWidth = imageEl.offsetWidth;
+                                        const containerHeight = imageEl.offsetHeight;
+                                        const naturalWidth = imageEl.naturalWidth || imageEl.width;
+                                        const naturalHeight = imageEl.naturalHeight || imageEl.height;
+                                        
+                                        if (containerWidth === 0 || containerHeight === 0 || naturalWidth === 0 || naturalHeight === 0) {
+                                            return null;
+                                        }
+                                        
+                                        const scaleX = containerWidth / naturalWidth;
+                                        const scaleY = containerHeight / naturalHeight;
+                                        const yScaled = label.y * scaleY;
+                                        
+                                        // Determinar texto para calcular el ancho
+                                        const previewText = label.attribute_key 
+                                            ? `[${label.attribute_key}]` 
+                                            : (label.label_text || 'Label');
+                                        
+                                        let left;
+                                        if (label.center_automatically) {
+                                            left = containerWidth / 2;
+                                        } else {
+                                            const xScaled = label.x * scaleX;
+                                            const textWidth = label.font_size * scaleX * 0.6 * previewText.length;
+                                            if (label.text_align_horizontal === 'center') {
+                                                left = xScaled - (textWidth / 2);
+                                            } else if (label.text_align_horizontal === 'right') {
+                                                left = xScaled - textWidth;
+                                            } else {
+                                                left = xScaled;
+                                            }
+                                        }
+                                        
+                                        const transforms = [];
+                                        if (label.center_automatically) {
+                                            transforms.push('translateX(-50%)');
+                                        }
+                                        if (label.text_align_vertical === 'middle') {
+                                            transforms.push('translateY(-50%)');
+                                        } else if (label.text_align_vertical === 'bottom') {
+                                            transforms.push('translateY(-100%)');
+                                        }
+                                        
+                                        const fontFamilyValue = label.font_family || 'Arial';
+                                        const fontFamily = fontFamilyValue.includes(' ') 
+                                            ? `"${fontFamilyValue}", sans-serif` 
+                                            : `${fontFamilyValue}, sans-serif`;
+                                        
+                                        const styles = {
+                                            position: 'absolute',
+                                            left: `${left}px`,
+                                            top: `${yScaled}px`,
+                                            fontSize: `${label.font_size * scaleX}px`,
+                                            fontFamily: fontFamily,
+                                            fontWeight: label.font_weight || '400',
+                                            color: label.font_color || '#000000',
+                                            pointerEvents: 'none',
+                                            border: selectedField === label.id ? '2px solid #10B981' : '1px solid #6EE7B7',
+                                            backgroundColor: selectedField === label.id ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+                                            textAlign: label.center_automatically ? 'center' : (label.text_align_horizontal || 'left'),
+                                            transform: transforms.length > 0 ? transforms.join(' ') : 'none',
+                                            whiteSpace: 'pre',
+                                        };
+                                        
+                                        // Determinar el texto a mostrar en la preview
+                                        const attributeText = label.attribute_key 
+                                            ? `[${label.attribute_key}]` 
+                                            : (label.label_text || 'Label');
+                                        
+                                        // Mostrar prefijo si existe (agregar espacio automáticamente si no tiene)
+                                        const hasPrefix = label.prefix && label.attribute_key;
+                                        const prefixFontSize = label.prefix_font_size || label.font_size || 14;
+                                        const prefixText = hasPrefix 
+                                            ? (label.prefix.endsWith(' ') ? label.prefix : label.prefix + ' ')
+                                            : '';
+                                        
+                                        return (
+                                            <div key={label.id} style={styles}>
+                                                {hasPrefix && (
+                                                    <span style={{ fontSize: `${prefixFontSize * scaleX}px` }}>
+                                                        {prefixText}
+                                                    </span>
+                                                )}
+                                                {attributeText}
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* Indicadores de posición de las imágenes */}
+                                    {images.filter(i => i.enabled !== false && i.y > 0).map((image) => {
+                                        const imageEl = imageRef.current;
+                                        if (!imageEl) return null;
+                                        
+                                        const containerWidth = imageEl.offsetWidth;
+                                        const containerHeight = imageEl.offsetHeight;
+                                        const naturalWidth = imageEl.naturalWidth || imageEl.width;
+                                        const naturalHeight = imageEl.naturalHeight || imageEl.height;
+                                        
+                                        if (containerWidth === 0 || containerHeight === 0 || naturalWidth === 0 || naturalHeight === 0) {
+                                            return null;
+                                        }
+                                        
+                                        const scaleX = containerWidth / naturalWidth;
+                                        const scaleY = containerHeight / naturalHeight;
+                                        const yScaled = image.y * scaleY;
+                                        const widthScaled = (image.image_width || 100) * scaleX;
+                                        const heightScaled = (image.image_height || 100) * scaleY;
+                                        
+                                        let left;
+                                        if (image.center_automatically) {
+                                            left = containerWidth / 2;
+                                        } else {
+                                            left = image.x * scaleX;
+                                        }
+                                        
+                                        const transforms = [];
+                                        if (image.center_automatically) {
+                                            transforms.push('translateX(-50%)');
+                                        }
+                                        
+                                        // Encontrar imagen de preview en galería
+                                        const galleryImg = galleryImages.find(g => g.name === image.attribute_key?.toLowerCase());
+                                        
+                                        const styles = {
+                                            position: 'absolute',
+                                            left: `${left}px`,
+                                            top: `${yScaled}px`,
+                                            width: `${widthScaled}px`,
+                                            height: `${heightScaled}px`,
+                                            pointerEvents: 'none',
+                                            border: selectedField === image.id ? '3px solid #D97706' : '2px dashed #F59E0B',
+                                            backgroundColor: selectedField === image.id ? 'rgba(217, 119, 6, 0.15)' : 'rgba(245, 158, 11, 0.1)',
+                                            transform: transforms.length > 0 ? transforms.join(' ') : 'none',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderRadius: '4px',
+                                        };
+                                        
+                                        return (
+                                            <div key={image.id} style={styles}>
+                                                {galleryImg ? (
+                                                    <img 
+                                                        src={galleryImg.file_url} 
+                                                        alt={image.attribute_key}
+                                                        className="max-w-full max-h-full object-contain opacity-70"
+                                                    />
+                                                ) : (
+                                                    <span className="text-amber-600 text-xs font-medium bg-white px-2 py-1 rounded">
+                                                        🖼️ [{image.attribute_key || 'imagen'}]
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+
                                     {/* Marcador de posición cuando se selecciona un campo */}
-                                    {selectedField && positions[selectedField].x > 0 && positions[selectedField].y > 0 && (() => {
-                                        const scaled = getScaledPosition(positions[selectedField].x, positions[selectedField].y);
+                                    {selectedField && getCurrentField() && getCurrentField().x > 0 && getCurrentField().y > 0 && (() => {
+                                        const currentField = getCurrentField();
+                                        const scaled = getScaledPosition(currentField.x, currentField.y);
                                         if (!scaled.scaleX) return null;
+                                        
+                                        const isLabel = selectedField !== 'name' && selectedField !== 'cedula';
                                         
                                         return (
                                             <div
@@ -896,9 +1492,9 @@ export default function Configure({ template, google_fonts_api_key }) {
                                                     transform: 'translate(-50%, -50%)',
                                                     width: '20px',
                                                     height: '20px',
-                                                    border: '2px solid #4F46E5',
+                                                    border: isLabel ? '2px solid #10B981' : '2px solid #4F46E5',
                                                     borderRadius: '50%',
-                                                    backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                                                    backgroundColor: isLabel ? 'rgba(16, 185, 129, 0.2)' : 'rgba(79, 70, 229, 0.2)',
                                                 }}
                                             />
                                         );

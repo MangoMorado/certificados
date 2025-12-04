@@ -3,11 +3,13 @@ import { Head, router, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import axios from 'axios';
 
-export default function Generate({ templates, people }) {
+export default function Generate({ templates = [], people = [] }) {
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [selectedPeople, setSelectedPeople] = useState([]);
     const [generating, setGenerating] = useState(false);
     const [generatedFiles, setGeneratedFiles] = useState([]);
+    const [asyncMessage, setAsyncMessage] = useState(null);
+    const [batchId, setBatchId] = useState(null);
 
     const togglePerson = (personId) => {
         setSelectedPeople((prev) =>
@@ -18,10 +20,10 @@ export default function Generate({ templates, people }) {
     };
 
     const selectAll = () => {
-        if (selectedPeople.length === people.length) {
+        if (selectedPeople.length === (people?.length || 0)) {
             setSelectedPeople([]);
         } else {
-            setSelectedPeople(people.map((p) => p.id));
+            setSelectedPeople((people || []).map((p) => p.id));
         }
     };
 
@@ -32,13 +34,23 @@ export default function Generate({ templates, people }) {
         }
 
         setGenerating(true);
+        setAsyncMessage(null);
+        setBatchId(null);
         try {
             const response = await axios.post(route('certificates.generate'), {
                 template_id: selectedTemplate,
                 person_ids: selectedPeople,
             });
 
-            setGeneratedFiles(response.data.files);
+            if (response.data.async) {
+                // Procesamiento asíncrono
+                setAsyncMessage(response.data.message);
+                setBatchId(response.data.batch_id);
+                setGeneratedFiles([]);
+            } else {
+                // Procesamiento síncrono (pocos certificados)
+                setGeneratedFiles(response.data.files || []);
+            }
         } catch (error) {
             alert('Error al generar certificados: ' + error.message);
         } finally {
@@ -66,7 +78,7 @@ export default function Generate({ templates, people }) {
                                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
                                     Seleccionar Diseño
                                 </h3>
-                                {templates.length === 0 ? (
+                                {(templates?.length || 0) === 0 ? (
                                     <div className="text-center py-4">
                                         <p className="text-gray-500 mb-2">
                                             No hay diseños disponibles.
@@ -85,7 +97,7 @@ export default function Generate({ templates, people }) {
                                         className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                     >
                                         <option value="">Selecciona un diseño</option>
-                                        {templates.map((template) => (
+                                        {(templates || []).map((template) => (
                                             <option key={template.id} value={template.id}>
                                                 {template.name}
                                             </option>
@@ -104,12 +116,12 @@ export default function Generate({ templates, people }) {
                                         onClick={selectAll}
                                         className="text-sm text-indigo-600 hover:text-indigo-900"
                                     >
-                                        {selectedPeople.length === people.length
+                                        {selectedPeople.length === (people?.length || 0)
                                             ? 'Deseleccionar Todo'
                                             : 'Seleccionar Todo'}
                                     </button>
                                 </div>
-                                {people.length === 0 ? (
+                                {(people?.length || 0) === 0 ? (
                                     <div className="text-center py-4">
                                         <p className="text-gray-500 mb-2">
                                             No hay personas registradas.
@@ -123,7 +135,7 @@ export default function Generate({ templates, people }) {
                                     </div>
                                 ) : (
                                     <div className="max-h-96 overflow-y-auto space-y-2">
-                                        {people.map((person) => (
+                                        {(people || []).map((person) => (
                                             <label
                                                 key={person.id}
                                                 className="flex items-center p-2 border border-gray-200 rounded hover:bg-gray-50 cursor-pointer"
@@ -164,23 +176,49 @@ export default function Generate({ templates, people }) {
                             <h3 className="text-lg font-semibold text-gray-900 mb-4">
                                 Certificados Generados
                             </h3>
-                            {generatedFiles.length === 0 ? (
+                            
+                            {/* Mensaje de procesamiento asíncrono */}
+                            {asyncMessage && (
+                                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <div className="flex items-start">
+                                        <svg className="w-5 h-5 text-blue-500 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <div>
+                                            <p className="text-sm text-blue-700">{asyncMessage}</p>
+                                            {batchId && (
+                                                <Link
+                                                    href={route('certificates.batch-show', batchId)}
+                                                    className="mt-2 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+                                                >
+                                                    Ver progreso
+                                                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                    </svg>
+                                                </Link>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {(generatedFiles?.length || 0) === 0 && !asyncMessage ? (
                                 <p className="text-gray-500 text-center py-8">
                                     Los certificados generados aparecerán aquí
                                 </p>
-                            ) : (
+                            ) : (generatedFiles?.length || 0) > 0 ? (
                                 <div className="space-y-2">
-                                    {generatedFiles.map((file, index) => (
+                                    {(generatedFiles || []).map((file, index) => (
                                         <div
                                             key={index}
                                             className="flex items-center justify-between p-3 border border-gray-200 rounded"
                                         >
                                             <div>
                                                 <p className="text-sm font-medium text-gray-900">
-                                                    {file.person.name}
+                                                    {file.person?.name}
                                                 </p>
                                                 <p className="text-xs text-gray-500">
-                                                    {file.person.cedula}
+                                                    {file.person?.cedula}
                                                 </p>
                                             </div>
                                             <a
@@ -193,7 +231,7 @@ export default function Generate({ templates, people }) {
                                         </div>
                                     ))}
                                 </div>
-                            )}
+                            ) : null}
                         </div>
                     </div>
                 </div>
